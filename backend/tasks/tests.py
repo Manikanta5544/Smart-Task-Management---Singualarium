@@ -74,38 +74,38 @@ class TaskScoringTest(TestCase):
         self.assertEqual(len(result), 1)
         self.assertIn("priority_score", result[0])
 
-def test_none_values_for_importance_and_hours(self):
-    tasks = [{
-        "id": "t1",
-        "title": "Task",
-        "due_date": None,
-        "estimated_hours": None,
-        "importance": None,
-        "dependencies": []
-    }]
+    def test_none_values_for_importance_and_hours(self):
+        tasks = [{
+            "id": "t1",
+            "title": "Task",
+            "due_date": None,
+            "estimated_hours": None,
+            "importance": None,
+            "dependencies": []
+        }]
 
-    result = analyze_tasks(tasks)[0]
+        result = analyze_tasks(tasks)[0]
 
-    self.assertIn("priority_score", result)
-    self.assertIsNotNone(result["priority_score"])
+        self.assertIn("priority_score", result)
+        self.assertIsNotNone(result["priority_score"])
 
-def test_invalid_due_date(self):
-    task = {
-        "id": "t1",
-        "title": "Bad date",
-        "due_date": "not-a-date",
-        "estimated_hours": 1,
-        "importance": 5,
-        "dependencies": []
-    }
+    def test_invalid_due_date(self):
+        task = {
+            "id": "t1",
+            "title": "Bad date",
+            "due_date": "not-a-date",
+            "estimated_hours": 1,
+            "importance": 5,
+            "dependencies": []
+        }
 
-    result = analyze_tasks([task])[0]
-    self.assertIn("Invalid date", result["explanation"])
+        result = analyze_tasks([task])[0]
+        self.assertIn("Invalid date", result["explanation"])
 
-def test_recommendations_limit_zero(self):
-    result = get_top_recommendations(self.sample_tasks, limit=0)
-    self.assertEqual(len(result["recommendations"]), 0)
+    def test_recommendations_limit_zero(self):
+        result = get_top_recommendations(self.sample_tasks, limit=0)
+        self.assertEqual(len(result["recommendations"]), 0)
 
-def test_recommendations_limit_exceeds_tasks(self):
-    result = get_top_recommendations(self.sample_tasks, limit=10)
-    self.assertEqual(len(result["recommendations"]), len(self.sample_tasks))
+    def test_recommendations_limit_exceeds_tasks(self):
+        result = get_top_recommendations(self.sample_tasks, limit=10)
+        self.assertEqual(len(result["recommendations"]), len(self.sample_tasks))

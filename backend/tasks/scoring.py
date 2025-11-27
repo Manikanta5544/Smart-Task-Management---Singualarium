@@ -44,17 +44,20 @@ def calculate_task_score(task: Dict, weights: Dict, blocking_counts: Dict, max_b
     today = date.today()
     
     due_date = task.get('due_date')
+    
     raw_importance = task.get('importance')
-    if raw_importance is None:
-        importance = 5
-    else:
-        importance = max(1, min(10, raw_importance))
+    try:
+        importance_val = int(raw_importance) if raw_importance is not None else 5
+    except:
+        importance_val = 5
+    importance = max(1, min(10, importance_val))        
 
-    raw_hours = task.get('estimated_hours')
-    if raw_hours is None:
-        estimated_hours = 4
-    else:
-        estimated_hours = max(0.5,float(raw_hours))    
+    raw_hours = task.get('estimated_hours')  
+    try:
+        hours_val = float(raw_hours) if raw_hours is not None else 4.0
+    except:
+        hours_val = 4.0
+    estimated_hours = max(0.5, hours_val)        
     
     urgency_score = 0.1
     urgency_details = ""
@@ -146,7 +149,7 @@ def analyze_tasks(tasks: List[Dict], strategy: str = "smart_balance") -> List[Di
         except:
             return date.max
 
-    scored_tasks.sort(key=lambda x: (-x['priority_score'], safe_due_date(x.get('due_date', '9999-12-31'))))
+    scored_tasks.sort(key=lambda x: (-x['priority_score'], safe_due_date(x.get('due_date'))))
     return scored_tasks
 
 def get_top_recommendations(tasks: List[Dict], strategy: str = "smart_balance", limit: int = 3) -> List[Dict]:

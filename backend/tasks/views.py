@@ -65,11 +65,11 @@ def suggest_tasks_view(request):
                 "cycles": cycles
             }, status=400)
         
-        recommendations = get_top_recommendations(tasks, strategy, limit)
+        result = get_top_recommendations(tasks, strategy, limit)
         
         return JsonResponse({
             "strategy": strategy,
-            "recommendations": recommendations,
+            "recommendations": result['recommendations'],
             "total_considered": len(tasks)
         })
         

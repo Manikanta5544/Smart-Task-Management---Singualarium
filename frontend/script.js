@@ -1,6 +1,7 @@
 class TaskManager {
     constructor() {
         this.tasks = [];
+        this.BACKEND_URL = 'http://127.0.0.1:8000'; 
         this.initializeEventListeners();
         this.updateTaskCount();
     }
@@ -84,7 +85,7 @@ class TaskManager {
         const strategy = document.getElementById('strategy').value;
 
         try {
-            const response = await fetch('/api/tasks/analyze/', {
+            const response = await fetch(`${this.BACKEND_URL}/api/tasks/analyze/`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({tasks: this.tasks, strategy})
@@ -115,7 +116,7 @@ class TaskManager {
 
         try {
             const tasksJson = encodeURIComponent(JSON.stringify(this.tasks));
-            const response = await fetch(`/api/tasks/suggest/?tasks=${tasksJson}&strategy=${strategy}`);
+            const response = await fetch(`${this.BACKEND_URL}/api/tasks/suggest/?tasks=${tasksJson}&strategy=${strategy}`);
 
             const data = await response.json();
             
@@ -190,7 +191,15 @@ class TaskManager {
                 <button class="remove-task" onclick="taskManager.removeTask('${task.id}')">Remove</button>
             </div>
         `).join('');
+         tasksList.querySelectorAll('.remove-task').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const taskId = e.target.getAttribute('data-task-id');
+                this.removeTask(taskId);
+            });
+        });
     }
+
+    
 
     removeTask(taskId) {
         this.tasks = this.tasks.filter(task => task.id !== taskId);

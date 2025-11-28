@@ -2,6 +2,9 @@ class TaskManager {
     constructor() {
         this.tasks = [];
         this.BACKEND_URL = 'http://127.0.0.1:8000'; 
+        this.network = null;
+        this.graphData = null;
+        this.physicsEnabled = true;
         this.initializeEventListeners();
         this.updateTaskCount();
     }
@@ -12,6 +15,10 @@ class TaskManager {
         document.getElementById('suggestBtn').addEventListener('click', () => this.getSuggestions());
         document.getElementById('loadJson').addEventListener('click', () => this.loadFromJson());
         document.getElementById('clearTasks').addEventListener('click', () => this.clearTasks());
+        document.getElementById('showGraphBtn').addEventListener('click', () => this.showDependencyGraph());
+        document.getElementById('fitGraphBtn').addEventListener('click', () => this.fitGraph());
+        document.getElementById('exportGraphBtn').addEventListener('click', () => this.exportGraph());
+        document.getElementById('togglePhysicsBtn').addEventListener('click', () => this.togglePhysics());
     }
 
     handleAddTask(event) {
@@ -231,6 +238,221 @@ class TaskManager {
         document.getElementById('analysisResults').classList.add('hidden');
         document.getElementById('suggestionsResults').classList.add('hidden');
         document.getElementById('error').classList.add('hidden');
+    }
+     async showDependencyGraph() {
+        if (this.tasks.length === 0) {
+            this.showError('No tasks to visualize');
+            return;
+        }
+
+        this.showLoading();
+
+        try {
+            const tasksJson = encodeURIComponent(JSON.stringify(this.tasks));
+            const response = await fetch(`${this.BACKEND_URL}/api/tasks/dependency-graph/?tasks=${tasksJson}`);
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            this.graphData = data.graph;
+            this.renderDependencyGraph(data.graph);
+            this.displayGraphAnalysis(data.graph.analysis);
+            
+        } catch (error) {
+            this.showError('Failed to load dependency graph: ' + error.message);
+        } finally {
+            this.hideLoading();
+        }
+    }
+
+    renderDependencyGraph(graphData) {
+        const graphContainer = document.getElementById('graphContainer');
+        const graphNetwork = document.getElementById('graphNetwork');
+        
+        if (!graphContainer || !graphNetwork) return;
+
+        graphContainer.classList.remove('hidden');
+
+        if (this.network) {
+            this.network.destroy();
+        }
+
+        const nodes = new vis.DataSet(graphData.nodes.map(node => ({
+            id: node.id,
+            label: node.label.length > 20 ? node.label.substring(0, 20) + '...' : node.label,
+            group: node.group,
+            value: node.value,
+            title: node.title,
+            font: { size: 14 },
+            shape: 'dot',
+            size: 20 + (node.value * 2),
+            borderWidth: 2,
+            color: this.getNodeColor(node.group),
+            shadow: true
+        })));
+
+        const edges = new vis.DataSet(graphData.edges.map(edge => ({
+            from: edge.from,
+            to: edge.to,
+            arrows: 'to',
+            color: edge.color,
+            width: 2,
+            smooth: { enabled: true, type: 'continuous' },
+            shadow: true
+        })));
+
+        const container = graphNetwork;
+        const data = { nodes, edges };
+        
+        const options = {
+            layout: {
+                improvedLayout: true
+            },
+            physics: {
+                enabled: this.physicsEnabled,
+                stabilization: { iterations: 100 }
+            },
+            interaction: {
+                dragNodes: true,
+                dragView: true,
+                zoomView: true
+            },
+            groups: {
+                critical: {
+                    color: { background: '#e74c3c', border: '#c0392b' },
+                    font: { color: '#ffffff', size: 14 },
+                    borderWidth: 3
+                },
+                root: {
+                    color: { background: '#27ae60', border: '#219a52' },
+                    font: { color: '#ffffff', size: 14 }
+                },
+                leaf: {
+                    color: { background: '#3498db', border: '#2980b9' },
+                    font: { color: '#ffffff', size: 14 }
+                },
+                independent: {
+                    color: { background: '#95a5a6', border: '#7f8c8d' },
+                    font: { color: '#ffffff', size: 14 }
+                },
+                normal: {
+                    color: { background: '#f39c12', border: '#d68910' },
+                    font: { color: '#ffffff', size: 14 }
+                }
+            }
+        };
+
+        this.network = new vis.Network(container, data, options);
+
+        this.network.on('click', (params) => {
+            if (params.nodes.length > 0) {
+                const nodeId = params.nodes[0];
+                this.highlightTaskInList(nodeId);
+            }
+        });
+
+        this.network.on('stabilizationIterationsDone', () => {
+            this.fitGraph();
+        });
+    }
+
+    getNodeColor(group) {
+        const colors = {
+            critical: { background: '#e74c3c', border: '#c0392b' },
+            root: { background: '#27ae60', border: '#219a52' },
+            leaf: { background: '#3498db', border: '#2980b9' },
+            independent: { background: '#95a5a6', border: '#7f8c8d' },
+            normal: { background: '#f39c12', border: '#d68910' }
+        };
+        return colors[group] || colors.normal;
+    }
+
+    displayGraphAnalysis(analysis) {
+        const analysisContainer = document.getElementById('graphAnalysis');
+        if (!analysisContainer) return;
+
+        let analysisHTML = `
+            <h4>Dependency Analysis</h4>
+            <div class="analysis-item">
+                <strong>Total Tasks:</strong> ${analysis.total_tasks}
+            </div>
+            <div class="analysis-item">
+                <strong>Total Dependencies:</strong> ${analysis.total_dependencies}
+            </div>
+        `;
+
+        if (analysis.circular_dependencies.length > 0) {
+            analysisHTML += `
+                <div class="circular-warning">
+                    <strong> Circular Dependencies Detected!</strong>
+                    <div>${analysis.circular_dependencies.map(cycle => cycle.join(' → ')).join('<br>')}</div>
+                </div>
+            `;
+        }
+
+        if (analysis.critical_tasks.length > 0) {
+            analysisHTML += `
+                <div class="analysis-item">
+                    <strong>Critical Tasks (Block ≥ 3 others):</strong> ${analysis.critical_tasks.join(', ')}
+                </div>
+            `;
+        }
+
+        if (analysis.root_tasks.length > 0) {
+            analysisHTML += `
+                <div class="analysis-item">
+                    <strong>Root Tasks (No dependencies):</strong> ${analysis.root_tasks.join(', ')}
+                </div>
+            `;
+        }
+
+        analysisContainer.innerHTML = analysisHTML;
+    }
+
+    highlightTaskInList(taskId) {
+        const taskItems = document.querySelectorAll('.task-item');
+        taskItems.forEach(item => {
+            if (item.querySelector('span').textContent.startsWith(taskId + ":")) {
+                item.style.backgroundColor = '#fff3cd';
+                item.style.border = '2px solid #ffc107';
+                setTimeout(() => {
+                    item.style.backgroundColor = '';
+                    item.style.border = '';
+                }, 2000);
+            }
+        });
+    }
+
+    fitGraph() {
+        if (this.network) {
+            this.network.fit({ animation: true });
+        }
+    }
+
+    exportGraph() {
+        if (this.network) {
+            const canvas = document.querySelector('#graphNetwork canvas');
+            if (canvas) {
+                const link = document.createElement('a');
+                link.download = 'dependency-graph.png';
+                link.href = canvas.toDataURL();
+                link.click();
+            }
+        }
+    }
+
+    togglePhysics() {
+        this.physicsEnabled = !this.physicsEnabled;
+        if (this.network) {
+            this.network.setOptions({ physics: { enabled: this.physicsEnabled } });
+        }
+        
+        const togglePhysicsBtn = document.getElementById('togglePhysicsBtn');
+        if (togglePhysicsBtn) {
+            togglePhysicsBtn.textContent = this.physicsEnabled ? 'Disable Physics' : 'Enable Physics';
+        }
     }
 }
 
